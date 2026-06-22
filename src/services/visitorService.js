@@ -84,7 +84,6 @@ export async function deleteVisitorByAdmin(id) {
 
   return handleResponse(response, "Failed to delete visitor");
 }
-
 export async function registerVisitor(visitorData) {
   const photoBase64 = visitorData.photoBase64 || visitorData.photo || "";
   const purpose = visitorData.purpose || visitorData.purposeOfVisit;
