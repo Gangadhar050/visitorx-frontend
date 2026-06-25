@@ -10,6 +10,7 @@ import {
 } from "../services/visitorService";
 
 const AUTO_LOGOUT_TIME = 30 * 60 * 1000;
+const MOBILE_BREAKPOINT = 768;
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -27,27 +28,29 @@ export default function AdminDashboard() {
   const [visitors, setVisitors] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const getVisitorId = (v) =>
-    v.visitorId || v.id || v.visitorID || "";
+  const getVisitorId = (v) => v.visitorId || v.id || v.visitorID || "";
 
-  const getVisitorPhone = (v) =>
-    v.mobileNumber || v.phone || v.mobile || "";
+  const getVisitorPhone = (v) => v.mobileNumber || v.phone || v.mobile || "";
 
   const getVisitorPurpose = (v) =>
     v.purposeOfVisit || v.purpose || v.visitPurpose || "";
 
   const getVisitorTime = (v) =>
-    v.visitDateTime ||
-    v.checkInTime ||
-    v.createdAt ||
-    v.timestamp ||
-    "";
+    v.visitDateTime || v.checkInTime || v.createdAt || v.timestamp || "";
 
   const getVisitorPhoto = (v) =>
     v.photoBase64 || v.photo || v.image || v.visitorPhoto || "";
+
+  const closeMobileSidebar = () => {
+    if (isMobileView) setIsMobileSidebarOpen(false);
+  };
 
   const handleForceLogout = async () => {
     try {
@@ -59,8 +62,25 @@ export default function AdminDashboard() {
 
     setIsAuthenticated(false);
     setVisitors([]);
+    setIsMobileSidebarOpen(false);
     navigate("/admin");
   };
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      setIsMobileView(mobile);
+
+      if (!mobile) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -139,10 +159,7 @@ export default function AdminDashboard() {
       });
       console.log("Login Response:", result);
       const token =
-        result.token ||
-        result.jwt ||
-        result.accessToken ||
-        result.access_token;
+        result.token || result.jwt || result.accessToken || result.access_token;
       console.log("Saved token:", token);
 
       if (!token || typeof token !== "string") {
@@ -167,6 +184,8 @@ export default function AdminDashboard() {
 
   // Upgraded handler to generate a native .xlsx file with cell image layouts
   const handleExportExcel = async () => {
+    closeMobileSidebar();
+
     if (visitors.length === 0) {
       alert("There are no visitor records available to export yet.");
       return;
@@ -192,8 +211,17 @@ export default function AdminDashboard() {
       const headerRow = worksheet.getRow(1);
       headerRow.height = 28;
       headerRow.eachCell((cell) => {
-        cell.font = { name: "Arial", size: 11, bold: true, color: { argb: "FFFFFF" } };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "0A1128" } };
+        cell.font = {
+          name: "Arial",
+          size: 11,
+          bold: true,
+          color: { argb: "FFFFFF" },
+        };
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "0A1128" },
+        };
         cell.alignment = { vertical: "middle", horizontal: "center" };
       });
 
@@ -218,14 +246,20 @@ export default function AdminDashboard() {
         row.eachCell((cell) => {
           cell.alignment = { vertical: "middle", horizontal: "left" };
         });
-        worksheet.getCell(`A${currentRowNum}`).alignment = { vertical: "middle", horizontal: "center" };
+        worksheet.getCell(`A${currentRowNum}`).alignment = {
+          vertical: "middle",
+          horizontal: "center",
+        };
 
         // Process Base64 photo rendering pipeline safely
         const photoString = getVisitorPhoto(v);
         if (photoString && typeof photoString === "string") {
           try {
-            const cleanBase64 = photoString.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
-            
+            const cleanBase64 = photoString.replace(
+              /^data:image\/(png|jpeg|jpg);base64,/,
+              ""
+            );
+
             const imageId = workbook.addImage({
               base64: cleanBase64,
               extension: "jpeg",
@@ -246,16 +280,26 @@ export default function AdminDashboard() {
       const fileBlob = new Blob([buffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
-      
-      saveAs(fileBlob, `Visitor_Logs_Export_${new Date().toISOString().split("T")[0]}.xlsx`);
+
+      saveAs(
+        fileBlob,
+        `Visitor_Logs_Export_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
     } catch (excelErr) {
       console.error("Excel rendering failure:", excelErr);
       alert("Failed creating native spreadsheet output stream.");
     }
   };
 
-  const handleNavigateToRegister = () => navigate("/register");
-  const handleNavigateToCapture = () => navigate("/capture");
+  const handleNavigateToRegister = () => {
+    closeMobileSidebar();
+    navigate("/register");
+  };
+
+  const handleNavigateToCapture = () => {
+    closeMobileSidebar();
+    navigate("/capture");
+  };
 
   const handleEdit = (visitor) => {
     navigate("/register", {
@@ -311,6 +355,114 @@ export default function AdminDashboard() {
       return { background: "#f3e5f5", color: "#6a1b9a" };
 
     return { background: "#f3f4f6", color: "#374151" };
+  };
+
+  const rootStyle = {
+    display: "flex",
+    minHeight: "100vh",
+    height: isMobileView ? "auto" : "100vh",
+    maxHeight: isMobileView ? "none" : "100vh",
+    overflow: isMobileView ? "auto" : "hidden",
+    fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
+    backgroundColor: "#f8f9fa",
+  };
+
+  const sidebarStyle = {
+    width: "260px",
+    minWidth: "260px",
+    background: "#0a1128",
+    color: "#fff",
+    padding: "32px 24px",
+    display: "flex",
+    flexDirection: "column",
+    boxSizing: "border-box",
+    height: isMobileView ? "100vh" : "100%",
+    position: isMobileView ? "fixed" : "relative",
+    top: 0,
+    left: 0,
+    zIndex: 1000,
+    transform: isMobileView
+      ? isMobileSidebarOpen
+        ? "translateX(0)"
+        : "translateX(-110%)"
+      : "translateX(0)",
+    transition: "transform 0.25s ease",
+    boxShadow:
+      isMobileView && isMobileSidebarOpen
+        ? "10px 0 30px rgba(15, 23, 42, 0.25)"
+        : "none",
+  };
+
+  const mainContentStyle = {
+    flex: 1,
+    padding: isMobileView ? "18px 14px 24px" : "30px 40px",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: "100vh",
+    height: isMobileView ? "auto" : "100%",
+    overflowY: isMobileView ? "visible" : "auto",
+    width: "100%",
+  };
+
+  const headerStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: isMobileView ? "flex-start" : "center",
+    gap: "12px",
+    marginBottom: "24px",
+    position: "relative",
+    flexShrink: 0,
+    flexWrap: isMobileView ? "wrap" : "nowrap",
+  };
+
+  const cardsGridStyle = {
+    display: "grid",
+    gridTemplateColumns: isMobileView ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+    gap: isMobileView ? "12px" : "20px",
+    marginBottom: "24px",
+    flexShrink: 0,
+  };
+
+  const controlsRowStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: isMobileView ? "stretch" : "center",
+    gap: "12px",
+    marginBottom: "20px",
+    flexShrink: 0,
+    flexDirection: isMobileView ? "column" : "row",
+  };
+
+  const actionButtonWrapStyle = {
+    display: "flex",
+    gap: "12px",
+    flexWrap: "wrap",
+    width: isMobileView ? "100%" : "auto",
+  };
+
+  const mobileButtonStyle = {
+    width: "42px",
+    height: "42px",
+    borderRadius: "10px",
+    border: "1px solid #cbd5e1",
+    background: "#fff",
+    color: "#0f172a",
+    fontSize: "22px",
+    cursor: "pointer",
+    fontWeight: "900",
+    display: isMobileView ? "flex" : "none",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  };
+
+  const overlayStyle = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15, 23, 42, 0.45)",
+    zIndex: 999,
+    display: isMobileView && isMobileSidebarOpen ? "block" : "none",
   };
 
   if (!isAuthenticated) {
@@ -479,45 +631,63 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        maxHeight: "100vh",
-        overflow: "hidden",
-        fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
-        backgroundColor: "#f8f9fa",
-      }}
-    >
+    <div style={rootStyle}>
+      <div style={overlayStyle} onClick={() => setIsMobileSidebarOpen(false)} />
+
       {/* Sidebar Frame */}
-      <div
-        style={{
-          width: "260px",
-          minWidth: "260px",
-          background: "#0a1128",
-          color: "#fff",
-          padding: "32px 24px",
-          display: "flex",
-          flexDirection: "column",
-          boxSizing: "border-box",
-          height: "100%",
-        }}
-      >
+      <div style={sidebarStyle}>
         <div
           style={{
-            fontSize: "26px",
-            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
             marginBottom: "40px",
-            color: "#fff",
-            letterSpacing: "0.5px",
             flexShrink: 0,
           }}
         >
-          Visitor<span style={{ color: "#1a73e8" }}>X</span>
+          <div
+            style={{
+              fontSize: "26px",
+              fontWeight: "bold",
+              color: "#fff",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Visitor<span style={{ color: "#1a73e8" }}>X</span>
+          </div>
+
+          {isMobileView && (
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(false)}
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "8px",
+                border: "1px solid #1e293b",
+                background: "#111827",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "18px",
+              }}
+            >
+              ×
+            </button>
+          )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1, overflowY: "auto", marginBottom: "16px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            flex: 1,
+            overflowY: "auto",
+            marginBottom: "16px",
+          }}
+        >
           <div
+            onClick={closeMobileSidebar}
             style={{
               display: "flex",
               alignItems: "center",
@@ -556,7 +726,14 @@ export default function AdminDashboard() {
             flexShrink: 0,
           }}
         >
-          <div style={{ color: "#94a3b8", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}>
+          <div
+            style={{
+              color: "#94a3b8",
+              cursor: "pointer",
+              fontSize: "14px",
+              fontWeight: "500",
+            }}
+          >
             ⚙️ &nbsp;Settings
           </div>
 
@@ -575,40 +752,41 @@ export default function AdminDashboard() {
       </div>
 
       {/* Main Content Pane */}
-      <div
-        style={{
-          flex: 1,
-          padding: "30px 40px",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          overflowY: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "24px",
-            position: "relative",
-            flexShrink: 0,
-          }}
-        >
-          <h1
+      <div style={mainContentStyle}>
+        <div style={headerStyle}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              style={mobileButtonStyle}
+              aria-label="Open admin menu"
+            >
+              ☰
+            </button>
+
+            <h1
+              style={{
+                margin: 0,
+                fontSize: isMobileView ? "26px" : "30px",
+                fontWeight: "800",
+                color: "#111827",
+                letterSpacing: "-0.5px",
+              }}
+            >
+              Dashboard
+            </h1>
+          </div>
+
+          <div
             style={{
-              margin: 0,
-              fontSize: "30px",
-              fontWeight: "800",
-              color: "#111827",
-              letterSpacing: "-0.5px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+              justifyContent: isMobileView ? "space-between" : "flex-end",
+              width: isMobileView ? "100%" : "auto",
             }}
           >
-            Dashboard
-          </h1>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
             <div style={{ fontSize: "14px", color: "#4b5563", fontWeight: "700" }}>
               📅 {new Date().toLocaleDateString("en-IN")}
             </div>
@@ -637,14 +815,14 @@ export default function AdminDashboard() {
               <div
                 style={{
                   position: "absolute",
-                  top: "45px",
+                  top: isMobileView ? "84px" : "45px",
                   right: "0",
                   backgroundColor: "#fff",
                   borderRadius: "8px",
                   boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
                   border: "1px solid #e2e8f0",
                   width: "160px",
-                  zIndex: 10,
+                  zIndex: 20,
                   overflow: "hidden",
                 }}
               >
@@ -679,15 +857,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Analytics Grid Block */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "20px",
-            marginBottom: "24px",
-            flexShrink: 0,
-          }}
-        >
+        <div style={cardsGridStyle}>
           {[
             { label: "TODAY'S VISITORS", count: todayVisitors, color: "#1a73e8", icon: "👥" },
             { label: "THIS WEEK", count: weekVisitors, color: "#111827", icon: "📅" },
@@ -698,22 +868,46 @@ export default function AdminDashboard() {
               key={i}
               style={{
                 background: "#fff",
-                padding: "20px",
+                padding: isMobileView ? "16px" : "20px",
                 borderRadius: "14px",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04)",
+                boxShadow:
+                  "0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04)",
                 position: "relative",
                 border: "1px solid #f3f4f6",
+                minHeight: isMobileView ? "88px" : "auto",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#6b7280", fontWeight: "800", letterSpacing: "0.5px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#6b7280",
+                  fontWeight: "800",
+                  letterSpacing: "0.5px",
+                }}
+              >
                 {card.label}
               </div>
 
-              <div style={{ fontSize: "28px", fontWeight: "800", marginTop: "4px", color: card.color }}>
+              <div
+                style={{
+                  fontSize: isMobileView ? "24px" : "28px",
+                  fontWeight: "800",
+                  marginTop: "4px",
+                  color: card.color,
+                }}
+              >
                 {card.count}
               </div>
 
-              <span style={{ position: "absolute", right: "20px", bottom: "20px", fontSize: "22px", opacity: 0.3 }}>
+              <span
+                style={{
+                  position: "absolute",
+                  right: "16px",
+                  bottom: "16px",
+                  fontSize: "22px",
+                  opacity: 0.3,
+                }}
+              >
                 {card.icon}
               </span>
             </div>
@@ -721,14 +915,14 @@ export default function AdminDashboard() {
         </div>
 
         {/* Action controls row */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px", flexShrink: 0 }}>
+        <div style={controlsRowStyle}>
           <input
             type="text"
             placeholder="Search by name, email or mobile number..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
-              width: "360px",
+              width: isMobileView ? "100%" : "360px",
               padding: "12px 16px",
               borderRadius: "10px",
               border: "1px solid #cbd5e1",
@@ -737,31 +931,68 @@ export default function AdminDashboard() {
               fontSize: "14px",
               outline: "none",
               backgroundColor: "#fff",
+              boxSizing: "border-box",
             }}
           />
 
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button onClick={fetchDashboardData} style={refreshButtonStyle}>
+          <div style={actionButtonWrapStyle}>
+            <button
+              onClick={fetchDashboardData}
+              style={{
+                ...refreshButtonStyle,
+                flex: isMobileView ? "1 1 120px" : "initial",
+              }}
+            >
               🔄 Refresh
             </button>
 
-            <button onClick={handleExportExcel} style={exportButtonStyle}>
+            <button
+              onClick={handleExportExcel}
+              style={{
+                ...exportButtonStyle,
+                flex: isMobileView ? "1 1 120px" : "initial",
+              }}
+            >
               📥 Export Excel
             </button>
 
-            <button onClick={handleNavigateToRegister} style={addButtonStyle}>
+            <button
+              onClick={handleNavigateToRegister}
+              style={{
+                ...addButtonStyle,
+                flex: isMobileView ? "1 1 120px" : "initial",
+              }}
+            >
               + Add Visitor
             </button>
           </div>
         </div>
 
         {loading && (
-          <p style={{ fontWeight: "700", color: "#2563eb", flexShrink: 0, margin: "0 0 12px 0" }}>
+          <p
+            style={{
+              fontWeight: "700",
+              color: "#2563eb",
+              flexShrink: 0,
+              margin: "0 0 12px 0",
+            }}
+          >
             Loading visitor data from backend...
           </p>
         )}
 
-        {error && <p style={{ fontWeight: "700", color: "#dc2626", flexShrink: 0, margin: "0 0 12px 0" }}>{error}</p>}
+        {error && (
+          <p
+            style={{
+              fontWeight: "700",
+              color: "#dc2626",
+              flexShrink: 0,
+              margin: "0 0 12px 0",
+            }}
+          >
+            {error}
+          </p>
+        )}
 
         {/* Data Table Block */}
         <div
@@ -769,12 +1000,21 @@ export default function AdminDashboard() {
             background: "#fff",
             borderRadius: "16px",
             border: "1px solid #e2e8f0",
-            flex: 1,
+            flex: isMobileView ? "initial" : 1,
             overflowX: "auto",
             overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
           }}
         >
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "1000px", tableLayout: "fixed" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              textAlign: "left",
+              minWidth: "1000px",
+              tableLayout: "fixed",
+            }}
+          >
             <colgroup>
               <col style={{ width: "5%" }} />
               <col style={{ width: "8%" }} />
@@ -805,7 +1045,9 @@ export default function AdminDashboard() {
                 <th style={{ padding: "14px 16px" }}>Email</th>
                 <th style={{ padding: "14px 16px" }}>Purpose</th>
                 <th style={{ padding: "14px 16px" }}>Check-In Time</th>
-                <th style={{ padding: "14px 16px", textAlign: "center" }}>Actions</th>
+                <th style={{ padding: "14px 16px", textAlign: "center" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
 
@@ -877,15 +1119,37 @@ export default function AdminDashboard() {
                         )}
                       </td>
 
-                      <td style={{ padding: "12px 16px", fontWeight: "700", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          fontWeight: "700",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {visitor.name || "—"}
                       </td>
 
-                      <td style={{ padding: "12px 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {getVisitorPhone(visitor) || "—"}
                       </td>
 
-                      <td style={{ padding: "12px 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {visitor.email || "—"}
                       </td>
 
@@ -908,16 +1172,32 @@ export default function AdminDashboard() {
                         </span>
                       </td>
 
-                      <td style={{ padding: "12px 16px", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          color: "#64748b",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {getVisitorTime(visitor) || "—"}
                       </td>
 
-                      <td style={{ padding: "12px 16px", whiteSpace: "nowrap", textAlign: "center" }}>
+                      <td
+                        style={{
+                          padding: "12px 16px",
+                          whiteSpace: "nowrap",
+                          textAlign: "center",
+                        }}
+                      >
                         <button onClick={() => handleEdit(visitor)} style={editButtonStyle}>
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(visitorId, visitor.name || "Visitor")}
+                          onClick={() =>
+                            handleDelete(visitorId, visitor.name || "Visitor")
+                          }
                           style={deleteButtonStyle}
                         >
                           Delete
